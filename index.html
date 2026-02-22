@@ -51,7 +51,7 @@
 
         const isPreview = typeof window.__firebase_config !== 'undefined' && window.__firebase_config !== '{}';
         const firebaseConfig = isPreview ? JSON.parse(window.__firebase_config) : MY_FIREBASE_CONFIG;
-        const appId = window.__app_id || 'bottoms-up-band-v1';
+        const appId = "bottoms-up-main-tab";
         
         let db, auth;
         if (firebaseConfig.apiKey) {
@@ -104,6 +104,7 @@
             const [paidMarks, setPaidMarks] = useState({});
             const [loading, setLoading] = useState(true);
             const [errorMsg, setErrorMsg] = useState(null);
+            const [status, setStatus] = useState("Connecting...");
             
             const [payer, setPayer] = useState(MEMBERS[0].name);
             const [splitAmong, setSplitAmong] = useState(MEMBERS.map(m => m.name));
@@ -115,10 +116,17 @@
 
             useEffect(() => {
                 if (!auth) return;
-                auth.signInAnonymously().catch(err => {
-                    setErrorMsg("Auth Error: Make sure 'Anonymous Sign-in' is enabled in Firebase Console.");
+                auth.signInAnonymously()
+                    .then(() => setStatus("Online"))
+                    .catch(err => {
+                        console.error(err);
+                        setErrorMsg("Cloud Sync Offline: Enable 'Anonymous Sign-in' in Firebase Console.");
+                        setStatus("Offline");
+                    });
+                return auth.onAuthStateChanged(u => {
+                    setUser(u);
+                    if (u) setStatus("Online");
                 });
-                return auth.onAuthStateChanged(setUser);
             }, []);
 
             useEffect(() => {
@@ -135,7 +143,8 @@
                     }
                 }, err => {
                     console.error("Firestore error:", err);
-                    setErrorMsg("Database Error: Check your Firestore Security Rules.");
+                    setErrorMsg("Database Locked: Update your Firestore Rules to 'allow read, write: if true;'");
+                    setStatus("Error");
                 });
 
                 const marksRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('marks');
@@ -157,7 +166,7 @@
                 setErrorMsg(null);
 
                 if (!user) {
-                    setErrorMsg("Waiting for sign-in... Enable 'Anonymous Auth' in Firebase Console if this persists.");
+                    setErrorMsg("Can't save: Not logged in. Check Firebase Auth settings.");
                     return;
                 }
                 
@@ -172,7 +181,7 @@
                     setActiveDateTab(date);
                 } catch (err) { 
                     console.error(err);
-                    setErrorMsg("Save Failed: Check Firestore permissions/rules.");
+                    setErrorMsg("Save Failed: Database permissions denied.");
                 }
             };
 
@@ -186,7 +195,7 @@
                         isPaid: !currentStatus, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     });
                 } catch (err) {
-                    setErrorMsg("Mark Error: Permission denied.");
+                    setErrorMsg("Could not mark as paid: Permission denied.");
                 }
             };
 
@@ -242,16 +251,9 @@
                         </button>
                     </header>
 
-                    {/* Error Message Display */}
                     {errorMsg && (
                         <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4 rounded-r-xl animate-pop">
-                            <p className="text-xs text-red-700 font-bold">{errorMsg}</p>
-                        </div>
-                    )}
-
-                    {!user && !errorMsg && (
-                        <div className="bg-amber-50 border-l-4 border-amber-400 p-4 mb-4 rounded-r-xl animate-pulse">
-                            <p className="text-xs text-amber-700 font-bold">Signing in anonymously...</p>
+                            <p className="text-[11px] text-red-700 font-bold leading-tight">{errorMsg}</p>
                         </div>
                     )}
 
@@ -259,11 +261,11 @@
                         <div className="bg-white rounded-[2rem] shadow-lg p-5 mb-6 border border-amber-50 animate-pop">
                             <form onSubmit={handleAddExpense} className="space-y-4">
                                 <section>
-                                    <p className="text-[10px] font-black uppercase text-amber-500 mb-2 tracking-widest">Payer</p>
+                                    <p className="text-[10px] font-black uppercase text-amber-500 mb-2 tracking-widest">Paid by</p>
                                     <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                                         {MEMBERS.map(m => (
                                             <button key={m.name} type="button" onClick={() => setPayer(m.name)}
-                                                className={`flex-1 min-w-[64px] flex flex-col items-center p-2 rounded-xl border-2 transition-all ${payer === m.name ? 'border-amber-400 bg-amber-50' : 'border-transparent bg-stone-50 opacity-40'}`}>
+                                                className={`flex-1 min-w-[64px] flex flex-col items-center p-2 rounded-xl border-2 transition-all ${payer === m.name ? 'border-amber-400 bg-amber-50 shadow-sm' : 'border-transparent bg-stone-50 opacity-40'}`}>
                                                 <InstrumentIcon name={m.name} color={m.color} className="w-6 h-6 mb-1" />
                                                 <span className="text-[9px] font-black">{m.name}</span>
                                             </button>
@@ -272,7 +274,7 @@
                                 </section>
 
                                 <section>
-                                    <p className="text-[10px] font-black uppercase text-amber-500 mb-2 tracking-widest">Split With</p>
+                                    <p className="text-[10px] font-black uppercase text-amber-500 mb-2 tracking-widest">For whom</p>
                                     <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                                         {MEMBERS.map(m => (
                                             <button key={m.name} type="button" onClick={() => handleToggleSplitMember(m.name)}
@@ -325,7 +327,7 @@
                                                 <InstrumentIcon name={exp.payer} color={MEMBERS.find(m => m.name === exp.payer)?.color} className="w-5 h-5" />
                                                 <div className="flex flex-col">
                                                     <span className="text-xs font-black text-stone-800 leading-none mb-1">{exp.description}</span>
-                                                    <span className="text-[9px] font-bold text-stone-400">By {exp.payer}</span>
+                                                    <span className="text-[9px] font-bold text-stone-400 uppercase tracking-tighter">Paid by {exp.payer}</span>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-3">
@@ -375,6 +377,11 @@
                             <p className="text-[10px] font-black tracking-widest uppercase">No Gatherings</p>
                         </div>
                     )}
+
+                    <footer className="mt-8 flex justify-center items-center gap-2 pb-4">
+                        <div className={`w-2 h-2 rounded-full ${status === "Online" ? "bg-green-500" : status === "Offline" ? "bg-red-500" : "bg-amber-500 animate-pulse"}`}></div>
+                        <span className="text-[9px] font-black uppercase text-stone-400 tracking-widest">{status} Sync</span>
+                    </footer>
                 </div>
             );
         }
