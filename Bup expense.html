@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BOTTOOMS UP!</title>
+    <!-- Core Scripts -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Firebase Compat Libraries (Essential for standalone HTML) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #FFFBF9; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        input[type="date"] { color-scheme: light; }
+        .check-glow { filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.5)); }
+        .animate-pop { animation: pop 0.3s ease-out; }
+        @keyframes pop {
+            0% { transform: scale(0.95); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        /**
+         * -------------------------------------------------------------------
+         * FIREBASE CONFIGURATION (Updated with your project details)
+         * -------------------------------------------------------------------
+         */
+        const MY_FIREBASE_CONFIG = {
+            apiKey: "AIzaSyC2XhQYlpbvx49wnTln2NyAZSkqOD3S5FI",
+            authDomain: "bottoms-up-expense.firebaseapp.com",
+            projectId: "bottoms-up-expense",
+            storageBucket: "bottoms-up-expense.firebasestorage.app",
+            messagingSenderId: "471424334212",
+            appId: "1:471424334212:web:871f269f84ef7acc8145d1"
+        };
+
+        // This logic checks if we are in the chat preview or on your GitHub link
+        const isPreview = typeof window.__firebase_config !== 'undefined' && window.__firebase_config !== '{}';
+        const firebaseConfig = isPreview ? JSON.parse(window.__firebase_config) : MY_FIREBASE_CONFIG;
+        const appId = window.__app_id || 'bottoms-up-band-v1';
+        
+        let db, auth;
+        if (firebaseConfig.apiKey) {
+            const app = firebase.initializeApp(firebaseConfig);
+            auth = firebase.auth(app);
+            db = firebase.firestore(app);
+        }
+
+        const MEMBERS = [
+            { name: "Nat", role: "Drums", color: "#f97316" },
+            { name: "Joyce", role: "Keyboard", color: "#6366f1" },
+            { name: "Gigi", role: "Vocals", color: "#ec4899" },
+            { name: "KK", role: "Guitar", color: "#d97706" },
+            { name: "Kat", role: "Bass", color: "#b91c1c" }
+        ];
+
+        const Icon = ({ name, className = "w-4 h-4", color = "currentColor" }) => {
+            const paths = {
+                music: <path d="M9 18V5l12-2v13M6 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm12-2a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />,
+                trash: <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6" />,
+                calc: <><rect width="16" height="20" x="4" y="2" rx="2" /><line x1="8" x2="16" y1="6" y2="6" /><line x1="16" x2="16" y1="14" y2="18" /><path d="M16 10h.01M12 10h.01M8 10h.01M12 14h.01M8 14h.01M12 18h.01M8 18h.01" /></>,
+                coins: <><circle cx="8" cy="8" r="6" /><path d="M18.09 10.37A6 6 0 1 1 10.34 18" /><line x1="7" x2="7" y1="6" y2="10" /><line x1="17" x2="17" y1="14" y2="18" /></>,
+                arrowRight: <path d="M5 12h14M12 5l7 7-7 7" />,
+                check: <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></>,
+                circle: <circle cx="12" cy="12" r="10" />,
+                plus: <path d="M12 5v14M5 12h14" />,
+                minus: <path d="M5 12h14" />,
+                nat: <g><path d="M3 10h18v6H3z" /><path d="M3 10l9 3 9-3" /><path d="M12 13v3" /><path d="m2 5 6 5" /><path d="m22 5-6 5" /></g>,
+                gigi: <g><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="22" /></g>,
+                kk: <g><circle cx="8" cy="16" r="3" /><path d="m10.5 14 9-9" /><path d="m17 3 4 4" /></g>,
+                kat: <g><circle cx="7" cy="17" r="3" /><path d="m9.5 15.5 11-11" /><path d="m18 2 4 4" /></g>,
+                joyce: <g><rect x="2" y="7" width="20" height="10" rx="1" /><path d="M6 7v10" /><path d="M10 7v10" /><path d="M14 5v14" /><path d="M18 5v14" /><path d="M2 12h20" /></g>
+            };
+
+            return (
+                <svg className={className} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    {paths[name]}
+                </svg>
+            );
+        };
+
+        const InstrumentIcon = ({ name, className, color }) => {
+            const iconName = name.toLowerCase();
+            return <Icon name={iconName} className={className} color={color} />;
+        };
+
+        function App() {
+            const [user, setUser] = useState(null);
+            const [expenses, setExpenses] = useState([]);
+            const [paidMarks, setPaidMarks] = useState({});
+            const [loading, setLoading] = useState(true);
+            
+            const [payer, setPayer] = useState(MEMBERS[0].name);
+            const [splitAmong, setSplitAmong] = useState(MEMBERS.map(m => m.name));
+            const [amount, setAmount] = useState('');
+            const [description, setDescription] = useState('');
+            const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+            const [activeDateTab, setActiveDateTab] = useState(null);
+            const [showForm, setShowForm] = useState(true);
+
+            useEffect(() => {
+                if (!auth) return;
+                auth.signInAnonymously().catch(console.error);
+                return auth.onAuthStateChanged(setUser);
+            }, []);
+
+            useEffect(() => {
+                if (!user || !db) return;
+                
+                const expensesRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('expenses');
+                const expUnsub = expensesRef.onSnapshot((snap) => {
+                    const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    setExpenses(data);
+                    setLoading(false);
+                    if (data.length > 0 && !activeDateTab) {
+                        const uniqueDates = [...new Set(data.map(e => e.date))].sort((a,b) => b.localeCompare(a));
+                        setActiveDateTab(uniqueDates[0]);
+                    }
+                }, err => console.error("Firestore error:", err));
+
+                const marksRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('marks');
+                const marksUnsub = marksRef.onSnapshot((snap) => {
+                    const marks = {};
+                    snap.docs.forEach(d => { marks[d.id] = d.data().isPaid; });
+                    setPaidMarks(marks);
+                });
+
+                return () => { expUnsub(); marksUnsub(); };
+            }, [user, activeDateTab]);
+
+            const handleToggleSplitMember = (name) => {
+                setSplitAmong(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
+            };
+
+            const handleAddExpense = async (e) => {
+                e.preventDefault();
+                if (!amount || isNaN(amount) || !user || !db || splitAmong.length === 0) return;
+                
+                try {
+                    await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('expenses').add({
+                        payer, amount: parseFloat(amount), description: description || "Band Fee", 
+                        date, splitAmong, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    setAmount(''); setDescription(''); setSplitAmong(MEMBERS.map(m => m.name));
+                    setActiveDateTab(date);
+                } catch (err) { console.error(err); }
+            };
+
+            const togglePaidMark = async (e, dateStr, from, to) => {
+                e.stopPropagation();
+                if (!db) return;
+                const markId = `${dateStr}_${from}_${to}`.replace(/\s+/g, '');
+                const currentStatus = paidMarks[markId] || false;
+                await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('marks').doc(markId).set({
+                    isPaid: !currentStatus, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            };
+
+            const groupedData = useMemo(() => {
+                const groups = {};
+                expenses.forEach(exp => {
+                    if (!groups[exp.date]) groups[exp.date] = { items: [], settlements: [] };
+                    groups[exp.date].items.push(exp);
+                });
+                
+                Object.keys(groups).forEach(dStr => {
+                    let balances = {}; 
+                    MEMBERS.forEach(m => balances[m.name] = 0);
+                    groups[dStr].items.forEach(exp => {
+                        balances[exp.payer] += exp.amount;
+                        const splitList = exp.splitAmong || MEMBERS.map(m => m.name);
+                        const share = exp.amount / (splitList.length || 1);
+                        splitList.forEach(name => { balances[name] -= share; });
+                    });
+                    
+                    let debtors = [], creditors = [];
+                    for (let n in balances) {
+                        if (balances[n] > 0.01) creditors.push({ name: n, amount: balances[n] });
+                        else if (balances[n] < -0.01) debtors.push({ name: n, amount: Math.abs(balances[n]) });
+                    }
+                    
+                    let txs = []; let i = 0, j = 0;
+                    const d = JSON.parse(JSON.stringify(debtors)); 
+                    const c = JSON.parse(JSON.stringify(creditors));
+                    while (i < d.length && j < c.length) {
+                        const p = Math.min(d[i].amount, c[j].amount);
+                        txs.push({ from: d[i].name, to: c[j].name, amount: p });
+                        d[i].amount -= p; c[j].amount -= p;
+                        if (d[i].amount < 0.01) i++;
+                        if (c[j].amount < 0.01) j++;
+                    }
+                    groups[dStr].settlements = txs;
+                });
+                return groups;
+            }, [expenses]);
+
+            const uniqueDates = useMemo(() => Object.keys(groupedData).sort((a,b) => b.localeCompare(a)), [groupedData]);
+
+            if (!firebaseConfig.apiKey) {
+                return (
+                    <div className="flex items-center justify-center min-h-screen p-6 text-center">
+                        <div className="bg-white p-8 rounded-3xl shadow-xl border border-amber-100 max-w-sm">
+                            <Icon name="music" className="w-12 h-12 mx-auto mb-4 text-amber-500" />
+                            <h1 className="text-xl font-black text-amber-900 mb-2 uppercase">Config Required</h1>
+                            <p className="text-stone-500 text-sm mb-4 text-left">
+                                Firebase configuration is missing. Please ensure your MY_FIREBASE_CONFIG is filled correctly.
+                            </p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="max-w-md mx-auto p-3">
+                    <header className="flex items-center justify-between mb-4 bg-white p-3 rounded-2xl shadow-sm border border-amber-50">
+                        <div className="flex items-center gap-2">
+                            <div className="w-10 h-10 bg-amber-900 rounded-xl flex items-center justify-center text-white font-black text-xl">B</div>
+                            <h1 className="text-xl font-black text-amber-900 tracking-tighter uppercase">BOTTOOMS UP!</h1>
+                        </div>
+                        <button onClick={() => setShowForm(!showForm)} className="p-2 bg-amber-900 text-white rounded-xl active:scale-90 transition-all">
+                            {showForm ? <Icon name="minus" /> : <Icon name="plus" />}
+                        </button>
+                    </header>
+
+                    {showForm && (
+                        <div className="bg-white rounded-[2rem] shadow-lg p-5 mb-6 border border-amber-50 animate-pop">
+                            <form onSubmit={handleAddExpense} className="space-y-4">
+                                <section>
+                                    <p className="text-[10px] font-black uppercase text-amber-500 mb-2 tracking-widest">Payer</p>
+                                    <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                                        {MEMBERS.map(m => (
+                                            <button key={m.name} type="button" onClick={() => setPayer(m.name)}
+                                                className={`flex-1 min-w-[64px] flex flex-col items-center p-2 rounded-xl border-2 transition-all ${payer === m.name ? 'border-amber-400 bg-amber-50' : 'border-transparent bg-stone-50 opacity-40'}`}>
+                                                <InstrumentIcon name={m.name} color={m.color} className="w-6 h-6 mb-1" />
+                                                <span className="text-[9px] font-black">{m.name}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </section>
+
+                                <section>
+                                    <p className="text-[10px] font-black uppercase text-amber-500 mb-2 tracking-widest">Split With</p>
+                                    <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                                        {MEMBERS.map(m => (
+                                            <button key={m.name} type="button" onClick={() => handleToggleSplitMember(m.name)}
+                                                className={`flex-1 min-w-[64px] flex flex-col items-center p-2 rounded-xl border-2 transition-all ${splitAmong.includes(m.name) ? 'border-emerald-400 bg-emerald-50' : 'border-transparent bg-stone-100 opacity-20'}`}>
+                                                <InstrumentIcon name={m.name} color={m.color} className="w-5 h-5 mb-1" />
+                                                <span className="text-[8px] font-black">{m.name}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </section>
+
+                                <div className="grid grid-cols-12 gap-2">
+                                    <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Studio, Pizza, Parking..." className="col-span-12 px-4 py-3 bg-stone-50 rounded-xl text-sm font-bold outline-none focus:ring-2 ring-amber-400 border-none" />
+                                    <div className="col-span-7 relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 font-black">$</span>
+                                        <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="w-full pl-7 pr-3 py-3 bg-stone-50 rounded-xl text-sm font-black outline-none focus:ring-2 ring-amber-400 border-none" required />
+                                    </div>
+                                    <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="col-span-5 px-2 py-3 bg-stone-50 rounded-xl text-[10px] font-bold outline-none border-none" />
+                                </div>
+                                <button type="submit" disabled={splitAmong.length === 0} className="w-full bg-amber-900 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-amber-900/10 active:scale-95 disabled:opacity-30 transition-all">
+                                    Log Entry
+                                </button>
+                            </form>
+                        </div>
+                    )}
+
+                    <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar">
+                        {uniqueDates.map(d => (
+                            <button key={d} onClick={() => setActiveDateTab(d)} className={`px-4 py-2.5 rounded-xl text-[11px] font-black uppercase transition-all whitespace-nowrap ${activeDateTab === d ? 'bg-amber-400 text-white shadow-md' : 'bg-white text-amber-800 border border-amber-100'}`}>
+                                {new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            </button>
+                        ))}
+                    </div>
+
+                    {activeDateTab && groupedData[activeDateTab] ? (
+                        <div className="space-y-4 animate-in fade-in duration-500">
+                            <div className="bg-white rounded-2xl p-4 shadow-sm border border-amber-50">
+                                <div className="flex justify-between items-center mb-4 border-b border-stone-50 pb-2">
+                                    <h3 className="text-[10px] font-black uppercase text-amber-400">Costs</h3>
+                                    <span className="text-[12px] font-black text-amber-900">${groupedData[activeDateTab].items.reduce((s, i) => s + i.amount, 0).toFixed(2)}</span>
+                                </div>
+                                <div className="space-y-2">
+                                    {groupedData[activeDateTab].items.map(exp => (
+                                        <div key={exp.id} className="flex items-center justify-between p-3 bg-stone-50 rounded-xl border border-stone-100">
+                                            <div className="flex items-center gap-3">
+                                                <InstrumentIcon name={exp.payer} color={MEMBERS.find(m => m.name === exp.payer)?.color} className="w-5 h-5" />
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-black text-stone-800 leading-none mb-1">{exp.description}</span>
+                                                    <span className="text-[9px] font-bold text-stone-400">By {exp.payer}</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xs font-black text-amber-900">${exp.amount.toFixed(2)}</span>
+                                                <button onClick={() => db.collection('artifacts').doc(appId).collection('public').doc('data').collection('expenses').doc(exp.id).delete()} className="p-1 text-stone-200 hover:text-red-400 transition-colors">
+                                                    <Icon name="trash" className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="bg-amber-900 rounded-[2rem] p-6 text-white shadow-2xl relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4 opacity-5"><Icon name="calc" className="w-24 h-24" /></div>
+                                <h3 className="text-sm font-black mb-5 uppercase text-amber-400 tracking-widest flex items-center gap-2 relative z-10">
+                                    <Icon name="coins" /> Settlements
+                                </h3>
+                                <div className="space-y-2 relative z-10">
+                                    {groupedData[activeDateTab].settlements.length === 0 ? <p className="text-center py-8 text-xs italic font-bold text-amber-200/50">Everyone is even! 🎶</p> :
+                                        groupedData[activeDateTab].settlements.map((s, idx) => {
+                                            const mid = `${activeDateTab}_${s.from}_${s.to}`.replace(/\s+/g, '');
+                                            const isPaid = paidMarks[mid] || false;
+                                            return (
+                                                <div key={idx} 
+                                                    onClick={(e) => togglePaidMark(e, activeDateTab, s.from, s.to)}
+                                                    className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between active:scale-95 ${isPaid ? 'bg-emerald-500/20 border-emerald-500/10 opacity-50' : 'bg-white/10 border-white/5 hover:bg-white/15'}`}>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={isPaid ? 'text-emerald-400 check-glow' : 'text-white/20'}>
+                                                            {isPaid ? <Icon name="check" className="w-5 h-5" /> : <Icon name="circle" className="w-5 h-5" />}
+                                                        </div>
+                                                        <span className={`text-[11px] font-black uppercase tracking-tight ${isPaid ? 'line-through text-white/50' : ''}`}>
+                                                            {s.from} <Icon name="arrowRight" className="w-3 h-3 inline mx-1 opacity-50" /> {s.to}
+                                                        </span>
+                                                    </div>
+                                                    <span className={`text-sm font-black ${isPaid ? 'text-white/40' : 'text-amber-400'}`}>${s.amount.toFixed(2)}</span>
+                                                </div>
+                                            );
+                                        })
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-center py-20 opacity-10 flex flex-col items-center">
+                            <Icon name="music" className="w-12 h-12 mb-2" />
+                            <p className="text-[10px] font-black tracking-widest uppercase">No Gatherings</p>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
