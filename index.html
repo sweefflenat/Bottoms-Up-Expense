@@ -103,6 +103,7 @@
             const [expenses, setExpenses] = useState([]);
             const [paidMarks, setPaidMarks] = useState({});
             const [loading, setLoading] = useState(true);
+            const [errorMsg, setErrorMsg] = useState(null);
             
             const [payer, setPayer] = useState(MEMBERS[0].name);
             const [splitAmong, setSplitAmong] = useState(MEMBERS.map(m => m.name));
@@ -114,7 +115,9 @@
 
             useEffect(() => {
                 if (!auth) return;
-                auth.signInAnonymously().catch(console.error);
+                auth.signInAnonymously().catch(err => {
+                    setErrorMsg("Auth Error: Make sure 'Anonymous Sign-in' is enabled in Firebase Console.");
+                });
                 return auth.onAuthStateChanged(setUser);
             }, []);
 
@@ -130,7 +133,10 @@
                         const uniqueDates = [...new Set(data.map(e => e.date))].sort((a,b) => b.localeCompare(a));
                         setActiveDateTab(uniqueDates[0]);
                     }
-                }, err => console.error("Firestore error:", err));
+                }, err => {
+                    console.error("Firestore error:", err);
+                    setErrorMsg("Database Error: Check your Firestore Security Rules.");
+                });
 
                 const marksRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('marks');
                 const marksUnsub = marksRef.onSnapshot((snap) => {
@@ -148,7 +154,14 @@
 
             const handleAddExpense = async (e) => {
                 e.preventDefault();
-                if (!amount || isNaN(amount) || !user || !db || splitAmong.length === 0) return;
+                setErrorMsg(null);
+
+                if (!user) {
+                    setErrorMsg("Waiting for sign-in... Enable 'Anonymous Auth' in Firebase Console if this persists.");
+                    return;
+                }
+                
+                if (!amount || isNaN(amount) || !db || splitAmong.length === 0) return;
                 
                 try {
                     await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('expenses').add({
@@ -157,7 +170,10 @@
                     });
                     setAmount(''); setDescription(''); setSplitAmong(MEMBERS.map(m => m.name));
                     setActiveDateTab(date);
-                } catch (err) { console.error(err); }
+                } catch (err) { 
+                    console.error(err);
+                    setErrorMsg("Save Failed: Check Firestore permissions/rules.");
+                }
             };
 
             const togglePaidMark = async (e, dateStr, from, to) => {
@@ -165,9 +181,13 @@
                 if (!db) return;
                 const markId = `${dateStr}_${from}_${to}`.replace(/\s+/g, '');
                 const currentStatus = paidMarks[markId] || false;
-                await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('marks').doc(markId).set({
-                    isPaid: !currentStatus, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                try {
+                    await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('marks').doc(markId).set({
+                        isPaid: !currentStatus, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                } catch (err) {
+                    setErrorMsg("Mark Error: Permission denied.");
+                }
             };
 
             const groupedData = useMemo(() => {
@@ -222,6 +242,19 @@
                         </button>
                     </header>
 
+                    {/* Error Message Display */}
+                    {errorMsg && (
+                        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4 rounded-r-xl animate-pop">
+                            <p className="text-xs text-red-700 font-bold">{errorMsg}</p>
+                        </div>
+                    )}
+
+                    {!user && !errorMsg && (
+                        <div className="bg-amber-50 border-l-4 border-amber-400 p-4 mb-4 rounded-r-xl animate-pulse">
+                            <p className="text-xs text-amber-700 font-bold">Signing in anonymously...</p>
+                        </div>
+                    )}
+
                     {showForm && (
                         <div className="bg-white rounded-[2rem] shadow-lg p-5 mb-6 border border-amber-50 animate-pop">
                             <form onSubmit={handleAddExpense} className="space-y-4">
@@ -259,7 +292,11 @@
                                     </div>
                                     <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="col-span-5 px-2 py-3 bg-stone-50 rounded-xl text-[10px] font-bold outline-none border-none" />
                                 </div>
-                                <button type="submit" disabled={splitAmong.length === 0} className="w-full bg-amber-900 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-amber-900/10 active:scale-95 disabled:opacity-30 transition-all">
+                                <button 
+                                    type="submit" 
+                                    disabled={splitAmong.length === 0 || !user} 
+                                    className="w-full bg-amber-900 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-amber-900/10 active:scale-95 disabled:opacity-30 transition-all"
+                                >
                                     Log Entry
                                 </button>
                             </form>
